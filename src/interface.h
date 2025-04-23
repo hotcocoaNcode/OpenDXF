@@ -5,6 +5,9 @@
 #ifndef RENDER_H
 #define RENDER_H
 
+#define WINDOW_BASE_WIDTH 800
+#define WINDOW_BASE_HEIGHT 600
+
 namespace opendxf {
     namespace interface {
         struct update_information {

@@ -7,7 +7,7 @@
 
 namespace opendxf {
     bool loop() {
-        interface::update_information info = interface::update();
+        const auto info = interface::update();
 
         return info.running;
     }
