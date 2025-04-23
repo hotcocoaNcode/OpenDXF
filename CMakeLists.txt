@@ -14,5 +14,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-add_executable(OpenDXF src/main.cpp)
+add_executable(OpenDXF src/main.cpp
+        src/interface.cpp
+        src/opendxf.cpp)
 target_link_libraries(OpenDXF PRIVATE OpenGL::GL glm::glm glfw)

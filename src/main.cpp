@@ -1,6 +1,8 @@
 #include <iostream>
 
+#include "opendxf.h"
+
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    opendxf::run();
     return 0;
 }
