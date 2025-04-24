@@ -5,19 +5,17 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#define WINDOW_BASE_WIDTH 800
-#define WINDOW_BASE_HEIGHT 600
+#define _OPENDXF_WINDOW_BASE_WIDTH 800
+#define _OPENDXF_WINDOW_BASE_HEIGHT 600
 
-namespace opendxf {
-    namespace interface {
-        struct update_information {
-            bool running = true;
-        };
+namespace opendxf::interface {
+    struct update_information {
+        bool running = true;
+    };
 
-        void init();
-        update_information update();
-        void quit();
-    }
+    void init();
+    update_information update();
+    void quit();
 }
 
 #endif //RENDER_H
