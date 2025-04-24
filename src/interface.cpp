@@ -19,7 +19,7 @@ namespace opendxf::interface {
     \
     void main()\
     {\
-        vec2 transformed = pos*vec2(0.5)*world_transform.xy - world_transform.zw;\
+        vec2 transformed = (pos - world_transform.zw)*world_transform.xy;\
         gl_Position = vec4(transformed.x, transformed.y, 0.0, 1.0);\
     }";
 
@@ -36,19 +36,23 @@ namespace opendxf::interface {
         -1., -1.,
         -1.,  1.,
          1., -1.,
-        -1.,  1.,
          1.,  1.,
-         1., -1.,
     };
 
     unsigned int global_vertex_shader_id;
+    unsigned int vao, vbo;
+
+    // TODO there will be more
     unsigned int program;
-    unsigned int vao;
-    unsigned int vbo;
     unsigned int ubo_location;
 
-    unsigned int fbuf_width;
-    unsigned int fbuf_height;
+    unsigned int fbuf_width, fbuf_height;
+
+    float view_x = 0.0f, view_y = 0.0f;
+    double mouse_last_x = 0.0, mouse_last_y = 0.0;
+    float sensitivity = 0.0025f;
+    float scale = 1.0;
+    bool plus_held = false, minus_held = false;
 
     void fbuf_callback(GLFWwindow* window, int width, int height)
     {
@@ -127,13 +131,44 @@ namespace opendxf::interface {
         glfwPollEvents();
         const bool running = !glfwWindowShouldClose(window);
 
+        double mouse_x, mouse_y;
+        glfwGetCursorPos(window, &mouse_x, &mouse_y);
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+
+            double diff_x = mouse_x - mouse_last_x;
+            double diff_y = mouse_y - mouse_last_y;
+            view_x -= diff_x*sensitivity/scale;
+            view_y += diff_y*sensitivity/scale;
+        }
+        mouse_last_x = mouse_x;
+        mouse_last_y = mouse_y;
+
+        if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS) {
+            if (!plus_held) {
+                scale *= 2;
+                plus_held = true;
+            }
+        } else {
+            plus_held = false;
+        }
+        if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS) {
+            if (!minus_held) {
+                scale /= 2;
+                minus_held = true;
+            }
+        } else {
+            minus_held = false;
+        }
+
+        if (scale < 0.0) scale = 0.25;
+
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        float world_transform[4] = {static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width), 1.0f, 0.0f, 0.0f};
+        const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view_x, view_y};
         glUniform4fv(static_cast<GLint>(ubo_location), 1, world_transform);
 
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
         return {running};
