@@ -9,6 +9,8 @@
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
 
+#include "opendxf.h"
+
 namespace opendxf::interface {
     GLFWwindow* window = nullptr;
 
@@ -32,22 +34,24 @@ namespace opendxf::interface {
         FragColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);\
     }";
 
-    float quad_vertices[] = {
+    float line_vertices[] = {
         -1., -1.,
-        -1.,  1.,
-         1., -1.,
-         1.,  1.,
+        1., 1.,
     };
 
+    // Graphics things
     unsigned int global_vertex_shader_id;
-    unsigned int vao, vbo;
+    unsigned int
+    vaos[OBJECT_TYPE_MAX_VALUE],
+    vbos[OBJECT_TYPE_MAX_VALUE],
+    programs[OBJECT_TYPE_MAX_VALUE],
+    ubo_locations[OBJECT_TYPE_MAX_VALUE],
+    draw_modes[OBJECT_TYPE_MAX_VALUE];
 
-    // TODO there will be more
-    unsigned int program;
-    unsigned int ubo_location;
-
+    // Backend things
     unsigned int fbuf_width, fbuf_height;
 
+    // Input things
     float view_x = 0.0f, view_y = 0.0f;
     double mouse_last_x = 0.0, mouse_last_y = 0.0;
     float sensitivity = 0.0025f;
@@ -75,6 +79,28 @@ namespace opendxf::interface {
         return shader_program;
     }
 
+    void register_otype_resources(object_type type, float* vertices, size_t vertices_size, const char* shader_text, unsigned int draw_mode) {
+        //Vbo/Vao
+        glGenVertexArrays(1, &vaos[type]);
+        glGenBuffers(1, &vbos[type]);
+
+        glBindVertexArray(vaos[type]);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbos[type]);
+        glBufferData(GL_ARRAY_BUFFER, vertices_size, vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        programs[type] = createShaderProgram(shader_fragment2d);
+        ubo_locations[type] = glGetUniformLocation(programs[type], "world_transform");
+
+        draw_modes[type] = draw_mode;
+    }
+
     void init() {
         glfwInit();
 
@@ -95,50 +121,34 @@ namespace opendxf::interface {
         glfwGetFramebufferSize(window, &w, &h);
         fbuf_callback(window, w, h);
 
-        glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
-
-        glBindVertexArray(vao);
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
-        glEnableVertexAttribArray(0);
-
-        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
         global_vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(global_vertex_shader_id, 1, &shader_vertex2d, nullptr);
         glCompileShader(global_vertex_shader_id);
 
-        program = createShaderProgram(shader_fragment2d);
+        register_otype_resources(LINE, line_vertices, sizeof(line_vertices), shader_fragment2d, GL_LINES);
 
-        glUseProgram(program);
+        //glEnable(GL_BLEND);
+        //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        ubo_location = glGetUniformLocation(program, "world_transform");
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
     void quit() {
         glfwTerminate();
     }
 
-    update_information update() {
+    update_information update(void* _objects, unsigned int count) {
         glfwPollEvents();
+        auto objects = static_cast<object*>(_objects);
         const bool running = !glfwWindowShouldClose(window);
 
         double mouse_x, mouse_y;
         glfwGetCursorPos(window, &mouse_x, &mouse_y);
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-
-            double diff_x = mouse_x - mouse_last_x;
-            double diff_y = mouse_y - mouse_last_y;
-            view_x -= diff_x*sensitivity/scale;
-            view_y += diff_y*sensitivity/scale;
+            const double diff_x = mouse_x - mouse_last_x;
+            const double diff_y = mouse_y - mouse_last_y;
+            view_x -= static_cast<float>(diff_x)*sensitivity/scale;
+            view_y += static_cast<float>(diff_y)*sensitivity/scale;
         }
         mouse_last_x = mouse_x;
         mouse_last_y = mouse_y;
@@ -162,13 +172,15 @@ namespace opendxf::interface {
 
         if (scale < 0.0) scale = 0.25;
 
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        object_type last_bound_type;
 
         const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view_x, view_y};
-        glUniform4fv(static_cast<GLint>(ubo_location), 1, world_transform);
+        glUniform4fv(static_cast<GLint>(ubo_locations[LINE]), 1, world_transform);
 
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glUseProgram(programs[LINE]);
+        glBindVertexArray(vaos[LINE]);
+        glDrawArrays(draw_modes[LINE], 0, 4);
 
         glfwSwapBuffers(window);
         return {running};
