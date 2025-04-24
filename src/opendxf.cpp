@@ -7,7 +7,13 @@
 
 namespace opendxf {
     bool loop() {
-        const auto info = interface::update(nullptr, 0);
+        object o[4] = {
+            {LINE, {-1., -1.}, {-1.,  1.}},
+            {LINE, {-1.,  1.}, { 1.,  1.}},
+            {LINE, { 1.,  1.}, { 1., -1.}},
+            {LINE, { 1., -1.}, {-1., -1.}}
+        };
+        const auto info = interface::update(&o, 4);
 
         return info.running;
     }

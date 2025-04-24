@@ -14,7 +14,7 @@ namespace opendxf::interface {
     };
 
     void init();
-    update_information update(void* objects, unsigned int count);
+    update_information update(void* _objects, unsigned int count);
     void quit();
 }
 

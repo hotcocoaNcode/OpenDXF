@@ -17,11 +17,12 @@ namespace opendxf::interface {
     auto shader_vertex2d = "\
     #version 330 core\
     layout (location = 0) in vec2 pos;\
+    uniform vec2 object_transform[2];\
     uniform vec4 world_transform;\
     \
     void main()\
     {\
-        vec2 transformed = (pos - world_transform.zw)*world_transform.xy;\
+        vec2 transformed = (object_transform[gl_VertexID] - world_transform.zw)*world_transform.xy;\
         gl_Position = vec4(transformed.x, transformed.y, 0.0, 1.0);\
     }";
 
@@ -34,6 +35,15 @@ namespace opendxf::interface {
         FragColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);\
     }";
 
+    float quad_vertices[] = {
+        -1., -1.,
+        -1., 1.,
+        1., -1.,
+        -1., 1.,
+        1., 1.,
+        1., -1.
+    };
+
     float line_vertices[] = {
         -1., -1.,
         1., 1.,
@@ -45,8 +55,11 @@ namespace opendxf::interface {
     vaos[OBJECT_TYPE_MAX_VALUE],
     vbos[OBJECT_TYPE_MAX_VALUE],
     programs[OBJECT_TYPE_MAX_VALUE],
-    ubo_locations[OBJECT_TYPE_MAX_VALUE],
+    global_ubo_locs[OBJECT_TYPE_MAX_VALUE],
+    object_ubo_locs[OBJECT_TYPE_MAX_VALUE],
     draw_modes[OBJECT_TYPE_MAX_VALUE];
+
+    unsigned int bg_vao, bg_vbo, bg_program;
 
     // Backend things
     unsigned int fbuf_width, fbuf_height;
@@ -96,7 +109,8 @@ namespace opendxf::interface {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         programs[type] = createShaderProgram(shader_fragment2d);
-        ubo_locations[type] = glGetUniformLocation(programs[type], "world_transform");
+        global_ubo_locs[type] = glGetUniformLocation(programs[type], "world_transform");
+        object_ubo_locs[type] = glGetUniformLocation(programs[type], "object_transform");
 
         draw_modes[type] = draw_mode;
     }
@@ -173,14 +187,23 @@ namespace opendxf::interface {
         if (scale < 0.0) scale = 0.25;
 
         glClear(GL_COLOR_BUFFER_BIT);
-        object_type last_bound_type;
+        object_type last_bound_type = OBJECT_TYPE_MAX_VALUE;
+        for (unsigned int i = 0; i < count; i++) {
+            const auto& object = objects[i];
+            const auto& type = object.type;
+            const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view_x, view_y};
+            glUniform4fv(static_cast<GLint>(global_ubo_locs[type]), 1, world_transform);
 
-        const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view_x, view_y};
-        glUniform4fv(static_cast<GLint>(ubo_locations[LINE]), 1, world_transform);
+            glUniform2fv(static_cast<GLint>(object_ubo_locs[type]), 2, reinterpret_cast<const float*>(&objects[i].pos_a));
 
-        glUseProgram(programs[LINE]);
-        glBindVertexArray(vaos[LINE]);
-        glDrawArrays(draw_modes[LINE], 0, 4);
+            if (last_bound_type != type) {
+                glUseProgram(programs[type]);
+                glBindVertexArray(0);
+                glBindVertexArray(vaos[type]);
+                last_bound_type = type;
+            }
+            glDrawArrays(draw_modes[type], 0, 2);
+        }
 
         glfwSwapBuffers(window);
         return {running};
