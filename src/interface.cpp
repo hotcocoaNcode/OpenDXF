@@ -3,13 +3,16 @@
 //
 
 #include "interface.h"
+#include "opendxf.h"
 
 #include <iostream>
 #include <ostream>
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
 
-#include "opendxf.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 
 namespace opendxf::interface {
     GLFWwindow* window = nullptr;
@@ -91,6 +94,7 @@ namespace opendxf::interface {
 
     // Backend things
     unsigned int fbuf_width, fbuf_height;
+    ImGuiIO* imgui_io;
 
     // Input things
     float view_x = 0.0f, view_y = 0.0f;
@@ -210,46 +214,31 @@ namespace opendxf::interface {
         //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+        ImGui::CreateContext();
+        imgui_io = &(ImGui::GetIO());
+        imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+
+        ImGui_ImplGlfw_InitForOpenGL(window, true);          // Second param install_callback=true will install GLFW callbacks and chain to existing ones.
+        ImGui_ImplOpenGL3_Init();
     }
 
     void quit() {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+
         glfwTerminate();
     }
 
-    update_information update(void* _objects, unsigned int count) {
-        glfwPollEvents();
-        auto objects = static_cast<object*>(_objects);
-        const bool running = !glfwWindowShouldClose(window);
-
-        double mouse_x, mouse_y;
-        glfwGetCursorPos(window, &mouse_x, &mouse_y);
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-            const double diff_x = mouse_x - mouse_last_x;
-            const double diff_y = mouse_y - mouse_last_y;
-            view_x -= static_cast<float>(diff_x)*sensitivity/scale;
-            view_y += static_cast<float>(diff_y)*sensitivity/scale;
-        }
-        mouse_last_x = mouse_x;
-        mouse_last_y = mouse_y;
-
-        if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS) {
-            if (!plus_held) {
-                scale *= 2;
-                plus_held = true;
-            }
-        } else {
-            plus_held = false;
-        }
-        if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS) {
-            if (!minus_held) {
-                scale /= 2;
-                minus_held = true;
-            }
-        } else {
-            minus_held = false;
-        }
-
-        if (scale < 0.0) scale = 0.25;
+    void render(const object* objects, const unsigned int count) {
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::Begin("OpenDXF");
+        ImGui::Text("Test window!");
+        ImGui::Text("Object Count: %u", count);
+        ImGui::End();
 
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -281,7 +270,51 @@ namespace opendxf::interface {
             glDrawArrays(draw_modes[type], 0, 2);
         }
 
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         glfwSwapBuffers(window);
+    }
+
+    update_information update(void* _objects, unsigned int count) {
+        glfwPollEvents();
+        auto objects = static_cast<object*>(_objects);
+        const bool running = !glfwWindowShouldClose(window);
+
+        if (!imgui_io->WantCaptureMouse) {
+            double mouse_x, mouse_y;
+            glfwGetCursorPos(window, &mouse_x, &mouse_y);
+            if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+                const double diff_x = mouse_x - mouse_last_x;
+                const double diff_y = mouse_y - mouse_last_y;
+                view_x -= static_cast<float>(diff_x)*sensitivity/scale;
+                view_y += static_cast<float>(diff_y)*sensitivity/scale;
+            }
+            mouse_last_x = mouse_x;
+            mouse_last_y = mouse_y;
+
+            if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS) {
+                if (!plus_held) {
+                    scale *= 2;
+                    plus_held = true;
+                }
+            } else {
+                plus_held = false;
+            }
+            if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS) {
+                if (!minus_held) {
+                    scale /= 2;
+                    minus_held = true;
+                }
+            } else {
+                minus_held = false;
+            }
+
+            if (scale < 0.0) scale = 0.25;
+        }
+
+        render(objects, count);
+
         return {running};
     }
 }

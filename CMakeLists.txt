@@ -14,7 +14,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+set(IMGUI_FILES
+        src/imgui/imgui.cpp
+        src/imgui/imgui_impl_glfw.cpp
+        src/imgui/imgui_impl_opengl3.cpp
+        src/imgui/imgui_tables.cpp
+        src/imgui/imgui_widgets.cpp
+        src/imgui/imgui_draw.cpp
+)
+
 add_executable(OpenDXF src/main.cpp
         src/interface.cpp
-        src/opendxf.cpp)
+        src/opendxf.cpp
+        ${IMGUI_FILES}
+)
+
 target_link_libraries(OpenDXF PRIVATE OpenGL::GL glm::glm glfw)
