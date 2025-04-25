@@ -5,21 +5,23 @@
 #include "opendxf.h"
 #include "interface.h"
 
+#include <vector>
+
 namespace opendxf {
+    std::vector<object> document{};
+
     bool loop() {
-        object o[4] = {
-            {LINE, {-1., -1.}, {-1.,  1.}},
-            {LINE, {-1.,  1.}, { 1.,  1.}},
-            {LINE, { 1.,  1.}, { 1., -1.}},
-            {LINE, { 1., -1.}, {-1., -1.}}
-        };
-        const auto info = interface::update(&o, 4);
+        const auto info = interface::update(&document[0], document.size());
 
         return info.running;
     }
 
     int run() {
         interface::init();
+        document.push_back({LINE, {-1., -1.}, {-1.,  1.}});
+        document.push_back({LINE, {-1.,  1.}, { 1.,  1.}});
+        document.push_back({LINE, { 1.,  1.}, { 1., -1.}});
+        document.push_back({LINE, { 1., -1.}, {-1., -1.}});
         while (loop()){}
         interface::quit();
         return 0;

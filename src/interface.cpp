@@ -32,10 +32,11 @@ namespace opendxf::interface {
     auto shader_fragment2d = "\
     #version 330 core\
     out vec4 FragColor;\
+    uniform vec3 object_color;\
     \
     void main()\
     {\
-        FragColor = vec4(1.0f);\
+        FragColor = vec4(object_color, 1.0f);\
     }";
 
     auto bg_vertex2d = "\
@@ -88,6 +89,7 @@ namespace opendxf::interface {
     programs[OBJECT_TYPE_MAX_VALUE],
     global_ubo_locs[OBJECT_TYPE_MAX_VALUE],
     object_ubo_locs[OBJECT_TYPE_MAX_VALUE],
+    object_col_locs[OBJECT_TYPE_MAX_VALUE],
     draw_modes[OBJECT_TYPE_MAX_VALUE];
 
     unsigned int bg_vao, bg_vbo, bg_program, bg_global_ubo_loc;
@@ -97,7 +99,8 @@ namespace opendxf::interface {
     ImGuiIO* imgui_io;
 
     // Input things
-    float view_x = 0.0f, view_y = 0.0f;
+    vec2 view{};
+    int view_width, view_height;
     double mouse_last_x = 0.0, mouse_last_y = 0.0;
     float sensitivity = 0.0025f;
     float scale = 0.25f;
@@ -108,6 +111,8 @@ namespace opendxf::interface {
         glViewport(0, 0, width, height);
         fbuf_width = width;
         fbuf_height = height;
+
+        glfwGetWindowSize(window, &view_width, &view_height);
     }
 
     unsigned int createShaderProgram(const char* frag_text) {
@@ -143,6 +148,7 @@ namespace opendxf::interface {
         programs[type] = createShaderProgram(shader_fragment2d);
         global_ubo_locs[type] = glGetUniformLocation(programs[type], "world_transform");
         object_ubo_locs[type] = glGetUniformLocation(programs[type], "object_transform");
+        object_col_locs[type] = glGetUniformLocation(programs[type], "object_color");
 
         draw_modes[type] = draw_mode;
     }
@@ -231,18 +237,18 @@ namespace opendxf::interface {
         glfwTerminate();
     }
 
-    void render(const object* objects, const unsigned int count) {
+    void render(const object* objects, const bool* selections, const unsigned int count, const vec2 mpos) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGui::Begin("OpenDXF");
-        ImGui::Text("Test window!");
         ImGui::Text("Object Count: %u", count);
+        ImGui::Text("Mouse: %f %f", mpos.x, mpos.y);
         ImGui::End();
 
         glClear(GL_COLOR_BUFFER_BIT);
 
-        const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view_x, view_y};
+        const float world_transform[4] = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width))*scale, (1.0f)*scale, view.x, view.y};
 
         glUseProgram(bg_program);
         glBindVertexArray(bg_vao);
@@ -250,6 +256,9 @@ namespace opendxf::interface {
         glBindBuffer(GL_ARRAY_BUFFER, bg_vbo);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
+
+        constexpr vec3 col_nrm = {1.0f, 1.0f, 1.0f};
+        constexpr vec3 col_sel = {0.0f, 1.0f, 1.0f};
 
         object_type last_bound_type = OBJECT_TYPE_MAX_VALUE;
         for (unsigned int i = 0; i < count; i++) {
@@ -265,6 +274,11 @@ namespace opendxf::interface {
                 last_bound_type = type;
             }
 
+            if (selections[i]) {
+                glUniform3fv(static_cast<GLint>(object_col_locs[type]), 1, reinterpret_cast<const float*>(&col_sel));
+            } else {
+                glUniform3fv(static_cast<GLint>(object_col_locs[type]), 1, reinterpret_cast<const float*>(&col_nrm));
+            }
             glUniform2fv(static_cast<GLint>(object_ubo_locs[type]), 2, reinterpret_cast<const float*>(&objects[i].pos_a));
 
             glDrawArrays(draw_modes[type], 0, 2);
@@ -276,19 +290,28 @@ namespace opendxf::interface {
         glfwSwapBuffers(window);
     }
 
-    update_information update(void* _objects, unsigned int count) {
+    update_information update(void* _objects, const unsigned int count) {
         glfwPollEvents();
         auto objects = static_cast<object*>(_objects);
         const bool running = !glfwWindowShouldClose(window);
 
+        double mouse_x, mouse_y;
+        glfwGetCursorPos(window, &mouse_x, &mouse_y);
+
+        // I just screwed with this until it worked.
+        // Don't touch unless you know what I did. I don't.
+        const vec2 mouse_screen_pos = {static_cast<float>(mouse_x)/view_width - 0.5f, static_cast<float>(mouse_y)/view_height - 0.5f};
+        const vec2 ratio = {(static_cast<float>(fbuf_height) / static_cast<float>(fbuf_width)), -1.0f};
+        const vec2 _scale = {scale/2.0f, scale/2.0f};
+        const vec2 true_mouse_pos = (mouse_screen_pos/ratio)/_scale + view;
+
+        bool selections[count];
         if (!imgui_io->WantCaptureMouse) {
-            double mouse_x, mouse_y;
-            glfwGetCursorPos(window, &mouse_x, &mouse_y);
             if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
                 const double diff_x = mouse_x - mouse_last_x;
                 const double diff_y = mouse_y - mouse_last_y;
-                view_x -= static_cast<float>(diff_x)*sensitivity/scale;
-                view_y += static_cast<float>(diff_y)*sensitivity/scale;
+                view.x -= static_cast<float>(diff_x)*sensitivity/scale;
+                view.y += static_cast<float>(diff_y)*sensitivity/scale;
             }
             mouse_last_x = mouse_x;
             mouse_last_y = mouse_y;
@@ -311,9 +334,21 @@ namespace opendxf::interface {
             }
 
             if (scale < 0.0) scale = 0.25;
+
+
+
+            for (unsigned int i = 0; i < count; i++) {
+                if (objects[i].type == LINE) {
+
+                }
+            }
+        } else {
+            for (unsigned int i = 0; i < count; i++) {
+                selections[i] = false;
+            }
         }
 
-        render(objects, count);
+        render(objects, selections, count, true_mouse_pos);
 
         return {running};
     }

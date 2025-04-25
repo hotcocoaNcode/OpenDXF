@@ -12,6 +12,37 @@ namespace opendxf {
     struct vec2 {
         float x;
         float y;
+
+        vec2 operator+(const vec2 & b) const {
+            return {x + b.x, y + b.y};
+        }
+
+        vec2 operator-(const vec2 & b) const {
+            return {x - b.x, y - b.y};
+        }
+
+        vec2 operator*(const vec2 & b) const {
+            return {x * b.x, y * b.y};
+        }
+
+        vec2 operator/(const vec2 & b) const {
+            return {x / b.x, y / b.y};
+        }
+    };
+
+    struct vec3 {
+        union {
+            float x;
+            float r;
+        };
+        union {
+            float y;
+            float g;
+        };
+        union {
+            float z;
+            float b;
+        };
     };
 
     struct object {
